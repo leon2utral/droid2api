@@ -7,7 +7,10 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # 必需：设置refresh token
+      # 认证配置（按优先级选择其一）：
+      # 最高优先级：固定API密钥（推荐用于生产环境）
+      - FACTORY_API_KEY=${FACTORY_API_KEY}
+      # 次优先级：refresh token自动刷新机制
       - DROID_REFRESH_KEY=${DROID_REFRESH_KEY}
       # 可选：如果需要修改端口，在config.json中配置
     volumes:

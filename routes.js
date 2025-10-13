@@ -1,6 +1,6 @@
 import express from 'express';
 import fetch from 'node-fetch';
-import { getConfig, getModelById, getEndpointByType, getSystemPrompt, getModelReasoning } from './config.js';
+import { getConfig, getModelById, getEndpointByType, getSystemPrompt, getModelReasoning, getRedirectedModelId } from './config.js';
 import { logInfo, logDebug, logError, logRequest, logResponse } from './logger.js';
 import { transformToAnthropic, getAnthropicHeaders } from './transformers/request-anthropic.js';
 import { transformToOpenAI, getOpenAIHeaders } from './transformers/request-openai.js';
@@ -80,10 +80,10 @@ router.get('/v1/models', (req, res) => {
 // 标准 OpenAI 聊天补全处理函数（带格式转换）
 async function handleChatCompletions(req, res) {
   logInfo('POST /v1/chat/completions');
-  
+
   try {
     const openaiRequest = req.body;
-    const modelId = openaiRequest.model;
+    const modelId = getRedirectedModelId(openaiRequest.model);
 
     if (!modelId) {
       return res.status(400).json({ error: 'model is required' });
@@ -125,15 +125,18 @@ async function handleChatCompletions(req, res) {
       'user-agent': clientHeaders['user-agent']
     });
 
+    // Update request body with redirected model ID before transformation
+    const requestWithRedirectedModel = { ...openaiRequest, model: modelId };
+
     if (model.type === 'anthropic') {
-      transformedRequest = transformToAnthropic(openaiRequest);
+      transformedRequest = transformToAnthropic(requestWithRedirectedModel);
       const isStreaming = openaiRequest.stream === true;
       headers = getAnthropicHeaders(authHeader, clientHeaders, isStreaming, modelId);
     } else if (model.type === 'openai') {
-      transformedRequest = transformToOpenAI(openaiRequest);
+      transformedRequest = transformToOpenAI(requestWithRedirectedModel);
       headers = getOpenAIHeaders(authHeader, clientHeaders);
     } else if (model.type === 'common') {
-      transformedRequest = transformToCommon(openaiRequest);
+      transformedRequest = transformToCommon(requestWithRedirectedModel);
       headers = getCommonHeaders(authHeader, clientHeaders);
     } else {
       return res.status(500).json({ error: `Unknown endpoint type: ${model.type}` });
@@ -228,10 +231,10 @@ async function handleChatCompletions(req, res) {
 // 直接转发 OpenAI 请求（不做格式转换）
 async function handleDirectResponses(req, res) {
   logInfo('POST /v1/responses');
-  
+
   try {
     const openaiRequest = req.body;
-    const modelId = openaiRequest.model;
+    const modelId = getRedirectedModelId(openaiRequest.model);
 
     if (!modelId) {
       return res.status(400).json({ error: 'model is required' });
@@ -277,9 +280,9 @@ async function handleDirectResponses(req, res) {
     // 获取 headers
     const headers = getOpenAIHeaders(authHeader, clientHeaders);
 
-    // 注入系统提示到 instructions 字段
+    // 注入系统提示到 instructions 字段，并更新重定向后的模型ID
     const systemPrompt = getSystemPrompt();
-    const modifiedRequest = { ...openaiRequest };
+    const modifiedRequest = { ...openaiRequest, model: modelId };
     if (systemPrompt) {
       // 如果已有 instructions，则在前面添加系统提示
       if (modifiedRequest.instructions) {
@@ -363,10 +366,10 @@ async function handleDirectResponses(req, res) {
 // 直接转发 Anthropic 请求（不做格式转换）
 async function handleDirectMessages(req, res) {
   logInfo('POST /v1/messages');
-  
+
   try {
     const anthropicRequest = req.body;
-    const modelId = anthropicRequest.model;
+    const modelId = getRedirectedModelId(anthropicRequest.model);
 
     if (!modelId) {
       return res.status(400).json({ error: 'model is required' });
@@ -413,9 +416,9 @@ async function handleDirectMessages(req, res) {
     const isStreaming = anthropicRequest.stream === true;
     const headers = getAnthropicHeaders(authHeader, clientHeaders, isStreaming, modelId);
 
-    // 注入系统提示到 system 字段
+    // 注入系统提示到 system 字段，并更新重定向后的模型ID
     const systemPrompt = getSystemPrompt();
-    const modifiedRequest = { ...anthropicRequest };
+    const modifiedRequest = { ...anthropicRequest, model: modelId };
     if (systemPrompt) {
       if (modifiedRequest.system && Array.isArray(modifiedRequest.system)) {
         // 如果已有 system 数组，则在最前面插入系统提示
