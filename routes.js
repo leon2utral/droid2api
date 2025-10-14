@@ -8,6 +8,7 @@ import { transformToCommon, getCommonHeaders } from './transformers/request-comm
 import { AnthropicResponseTransformer } from './transformers/response-anthropic.js';
 import { OpenAIResponseTransformer } from './transformers/response-openai.js';
 import { getApiKey } from './auth.js';
+import { obfuscateRequestBody, deobfuscateResponseBody, DeobfuscateTransform } from './req-obfuscator.js';
 
 const router = express.Router();
 
@@ -82,7 +83,9 @@ async function handleChatCompletions(req, res) {
   logInfo('POST /v1/chat/completions');
 
   try {
-    const openaiRequest = req.body;
+    // Obfuscate request body first
+    const obfuscatedBody = obfuscateRequestBody(req.body);
+    const openaiRequest = obfuscatedBody;
     const modelId = getRedirectedModelId(openaiRequest.model);
 
     if (!modelId) {
@@ -171,7 +174,8 @@ async function handleChatCompletions(req, res) {
       // common 类型直接转发，不使用 transformer
       if (model.type === 'common') {
         try {
-          for await (const chunk of response.body) {
+          const deobfuscator = new DeobfuscateTransform();
+          for await (const chunk of deobfuscator.transformStream(response.body)) {
             res.write(chunk);
           }
           res.end();
@@ -190,7 +194,8 @@ async function handleChatCompletions(req, res) {
         }
 
         try {
-          for await (const chunk of transformer.transformStream(response.body)) {
+          const deobfuscator = new DeobfuscateTransform();
+          for await (const chunk of deobfuscator.transformStream(transformer.transformStream(response.body))) {
             res.write(chunk);
           }
           res.end();
@@ -205,17 +210,20 @@ async function handleChatCompletions(req, res) {
       if (model.type === 'openai') {
         try {
           const converted = convertResponseToChatCompletion(data);
-          logResponse(200, null, converted);
-          res.json(converted);
+          const deobfuscated = deobfuscateResponseBody(converted);
+          logResponse(200, null, deobfuscated);
+          res.json(deobfuscated);
         } catch (e) {
           // 如果转换失败，回退为原始数据
-          logResponse(200, null, data);
-          res.json(data);
+          const deobfuscated = deobfuscateResponseBody(data);
+          logResponse(200, null, deobfuscated);
+          res.json(deobfuscated);
         }
       } else {
         // anthropic/common: 保持现有逻辑，直接转发
-        logResponse(200, null, data);
-        res.json(data);
+        const deobfuscated = deobfuscateResponseBody(data);
+        logResponse(200, null, deobfuscated);
+        res.json(deobfuscated);
       }
     }
 
@@ -233,7 +241,9 @@ async function handleDirectResponses(req, res) {
   logInfo('POST /v1/responses');
 
   try {
-    const openaiRequest = req.body;
+    // Obfuscate request body first
+    const obfuscatedBody = obfuscateRequestBody(req.body);
+    const openaiRequest = obfuscatedBody;
     const modelId = getRedirectedModelId(openaiRequest.model);
 
     if (!modelId) {
@@ -337,8 +347,9 @@ async function handleDirectResponses(req, res) {
       res.setHeader('Connection', 'keep-alive');
 
       try {
-        // 直接将原始响应流转发给客户端
-        for await (const chunk of response.body) {
+        // 直接将原始响应流转发给客户端，并应用反混淆
+        const deobfuscator = new DeobfuscateTransform();
+        for await (const chunk of deobfuscator.transformStream(response.body)) {
           res.write(chunk);
         }
         res.end();
@@ -350,8 +361,9 @@ async function handleDirectResponses(req, res) {
     } else {
       // 直接转发非流式响应，不做任何转换
       const data = await response.json();
-      logResponse(200, null, data);
-      res.json(data);
+      const deobfuscated = deobfuscateResponseBody(data);
+      logResponse(200, null, deobfuscated);
+      res.json(deobfuscated);
     }
 
   } catch (error) {
@@ -368,7 +380,9 @@ async function handleDirectMessages(req, res) {
   logInfo('POST /v1/messages');
 
   try {
-    const anthropicRequest = req.body;
+    // Obfuscate request body first
+    const obfuscatedBody = obfuscateRequestBody(req.body);
+    const anthropicRequest = obfuscatedBody;
     const modelId = getRedirectedModelId(anthropicRequest.model);
 
     if (!modelId) {
@@ -482,8 +496,9 @@ async function handleDirectMessages(req, res) {
       res.setHeader('Connection', 'keep-alive');
 
       try {
-        // 直接将原始响应流转发给客户端
-        for await (const chunk of response.body) {
+        // 直接将原始响应流转发给客户端，并应用反混淆
+        const deobfuscator = new DeobfuscateTransform();
+        for await (const chunk of deobfuscator.transformStream(response.body)) {
           res.write(chunk);
         }
         res.end();
@@ -495,8 +510,9 @@ async function handleDirectMessages(req, res) {
     } else {
       // 直接转发非流式响应，不做任何转换
       const data = await response.json();
-      logResponse(200, null, data);
-      res.json(data);
+      const deobfuscated = deobfuscateResponseBody(data);
+      logResponse(200, null, deobfuscated);
+      res.json(deobfuscated);
     }
 
   } catch (error) {
@@ -513,7 +529,9 @@ async function handleCountTokens(req, res) {
   logInfo('POST /v1/messages/count_tokens');
 
   try {
-    const anthropicRequest = req.body;
+    // Obfuscate request body first
+    const obfuscatedBody = obfuscateRequestBody(req.body);
+    const anthropicRequest = obfuscatedBody;
     const modelId = getRedirectedModelId(anthropicRequest.model);
 
     if (!modelId) {
@@ -583,8 +601,9 @@ async function handleCountTokens(req, res) {
     }
 
     const data = await response.json();
-    logResponse(200, null, data);
-    res.json(data);
+    const deobfuscated = deobfuscateResponseBody(data);
+    logResponse(200, null, deobfuscated);
+    res.json(deobfuscated);
 
   } catch (error) {
     logError('Error in /v1/messages/count_tokens', error);
