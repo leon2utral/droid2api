@@ -8,6 +8,34 @@ const __dirname = path.dirname(__filename);
 
 let replacements = {};
 let reverseReplacements = {};
+let config = { 'res-obfuscation': false };
+
+/**
+ * Load control configuration from req.json
+ */
+function loadConfig() {
+  try {
+    const configPath = path.join(__dirname, 'req-replace', 'req.json');
+    
+    if (!fs.existsSync(configPath)) {
+      logInfo('req.json not found, using default config (res-obfuscation: false)');
+      config = { 'res-obfuscation': false };
+      return;
+    }
+
+    const fileContent = fs.readFileSync(configPath, 'utf-8');
+    config = JSON.parse(fileContent);
+    
+    if (typeof config['res-obfuscation'] !== 'boolean') {
+      config['res-obfuscation'] = false;
+    }
+    
+    logInfo(`Loaded config: res-obfuscation=${config['res-obfuscation']}`);
+  } catch (error) {
+    logError('Failed to load req.json', error);
+    config = { 'res-obfuscation': false };
+  }
+}
 
 /**
  * Load replacement rules from req-replace.json
@@ -96,6 +124,10 @@ export function obfuscateRequestBody(body) {
  * @returns {any} - Deobfuscated body
  */
 export function deobfuscateResponseBody(body) {
+  if (!config['res-obfuscation']) {
+    return body;
+  }
+  
   if (Object.keys(reverseReplacements).length === 0) {
     return body;
   }
@@ -148,6 +180,10 @@ export class DeobfuscateTransform {
    * @returns {Buffer} - The processed chunk
    */
   transform(chunk) {
+    if (!config['res-obfuscation']) {
+      return chunk;
+    }
+    
     if (Object.keys(reverseReplacements).length === 0) {
       return chunk;
     }
@@ -169,5 +205,6 @@ export class DeobfuscateTransform {
   }
 }
 
-// Load replacements on module initialization
+// Load config and replacements on module initialization
+loadConfig();
 loadReplacements();
