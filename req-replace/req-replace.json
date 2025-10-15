@@ -11,7 +11,7 @@
       "rule":{
         "简体中文":"简体的中文"
       },
-      "active": false,
+      "active": true,
       "res-obfs":false
     }
   ]
