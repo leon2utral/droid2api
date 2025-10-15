@@ -6,36 +6,8 @@ import { logDebug, logError, logInfo } from './logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-let replacements = {};
-let reverseReplacements = {};
-let config = { 'res-obfuscation': false };
-
-/**
- * Load control configuration from req.json
- */
-function loadConfig() {
-  try {
-    const configPath = path.join(__dirname, 'req-replace', 'req.json');
-    
-    if (!fs.existsSync(configPath)) {
-      logInfo('req.json not found, using default config (res-obfuscation: false)');
-      config = { 'res-obfuscation': false };
-      return;
-    }
-
-    const fileContent = fs.readFileSync(configPath, 'utf-8');
-    config = JSON.parse(fileContent);
-    
-    if (typeof config['res-obfuscation'] !== 'boolean') {
-      config['res-obfuscation'] = false;
-    }
-    
-    logInfo(`Loaded config: res-obfuscation=${config['res-obfuscation']}`);
-  } catch (error) {
-    logError('Failed to load req.json', error);
-    config = { 'res-obfuscation': false };
-  }
-}
+let requestReplacements = {};
+let responseReplacements = {};
 
 /**
  * Load replacement rules from req-replace.json
@@ -46,26 +18,60 @@ export function loadReplacements() {
     
     if (!fs.existsSync(configPath)) {
       logInfo('req-replace.json not found, obfuscation disabled');
-      replacements = {};
-      reverseReplacements = {};
+      requestReplacements = {};
+      responseReplacements = {};
       return;
     }
 
     const fileContent = fs.readFileSync(configPath, 'utf-8');
-    replacements = JSON.parse(fileContent);
+    const config = JSON.parse(fileContent);
     
-    // Build reverse mapping for deobfuscation
-    reverseReplacements = {};
-    for (const [key, value] of Object.entries(replacements)) {
-      reverseReplacements[value] = key;
+    if (!config.rules || !Array.isArray(config.rules)) {
+      logError('Invalid req-replace.json format: rules array not found');
+      requestReplacements = {};
+      responseReplacements = {};
+      return;
     }
     
-    logInfo(`Loaded ${Object.keys(replacements).length} replacement rules`);
-    logDebug('Replacement rules', replacements);
+    // Build request replacements (active rules only)
+    requestReplacements = {};
+    let activeCount = 0;
+    
+    for (const ruleObj of config.rules) {
+      const active = ruleObj.active !== false; // default true
+      
+      if (active && ruleObj.rule && typeof ruleObj.rule === 'object') {
+        for (const [key, value] of Object.entries(ruleObj.rule)) {
+          requestReplacements[key] = value;
+        }
+        activeCount++;
+      }
+    }
+    
+    // Build response replacements (active rules with res-obfs=true only)
+    responseReplacements = {};
+    let resObfsCount = 0;
+    
+    for (const ruleObj of config.rules) {
+      const active = ruleObj.active !== false; // default true
+      const resObfs = ruleObj['res-obfs'] === true; // default false
+      
+      if (active && resObfs && ruleObj.rule && typeof ruleObj.rule === 'object') {
+        // For response, we need reverse mapping: value -> key
+        for (const [key, value] of Object.entries(ruleObj.rule)) {
+          responseReplacements[value] = key;
+        }
+        resObfsCount++;
+      }
+    }
+    
+    logInfo(`Loaded ${activeCount} active request rules, ${resObfsCount} response deobfuscation rules`);
+    logDebug('Request replacement rules', requestReplacements);
+    logDebug('Response replacement rules', responseReplacements);
   } catch (error) {
     logError('Failed to load req-replace.json', error);
-    replacements = {};
-    reverseReplacements = {};
+    requestReplacements = {};
+    responseReplacements = {};
   }
 }
 
@@ -80,7 +86,7 @@ export function obfuscateString(str) {
   }
   
   let result = str;
-  for (const [key, value] of Object.entries(replacements)) {
+  for (const [key, value] of Object.entries(requestReplacements)) {
     result = result.split(key).join(value);
   }
   
@@ -98,7 +104,7 @@ export function deobfuscateString(str) {
   }
   
   let result = str;
-  for (const [key, value] of Object.entries(reverseReplacements)) {
+  for (const [key, value] of Object.entries(responseReplacements)) {
     result = result.split(key).join(value);
   }
   
@@ -111,7 +117,7 @@ export function deobfuscateString(str) {
  * @returns {any} - Obfuscated body
  */
 export function obfuscateRequestBody(body) {
-  if (Object.keys(replacements).length === 0) {
+  if (Object.keys(requestReplacements).length === 0) {
     return body;
   }
   
@@ -124,11 +130,7 @@ export function obfuscateRequestBody(body) {
  * @returns {any} - Deobfuscated body
  */
 export function deobfuscateResponseBody(body) {
-  if (!config['res-obfuscation']) {
-    return body;
-  }
-  
-  if (Object.keys(reverseReplacements).length === 0) {
+  if (Object.keys(responseReplacements).length === 0) {
     return body;
   }
   
@@ -180,11 +182,7 @@ export class DeobfuscateTransform {
    * @returns {Buffer} - The processed chunk
    */
   transform(chunk) {
-    if (!config['res-obfuscation']) {
-      return chunk;
-    }
-    
-    if (Object.keys(reverseReplacements).length === 0) {
+    if (Object.keys(responseReplacements).length === 0) {
       return chunk;
     }
     
@@ -205,6 +203,5 @@ export class DeobfuscateTransform {
   }
 }
 
-// Load config and replacements on module initialization
-loadConfig();
+// Load replacements on module initialization
 loadReplacements();

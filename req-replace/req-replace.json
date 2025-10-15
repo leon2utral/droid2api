@@ -1,4 +1,19 @@
 {
-  " ": "  ",
-  "简体中文":"简体的中文"
+  "rules":[
+    {
+      "rule":{
+        " ":"  "
+      },
+      "active": true,
+      "res-obfs":true
+    },
+    {
+      "rule":{
+        "简体中文":"简体的中文"
+      },
+      "active": false,
+      "res-obfs":false
+    }
+  ]
+
 }
