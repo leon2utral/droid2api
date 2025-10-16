@@ -1,19 +1,28 @@
 {
-  "rules":[
+  "rules": [
     {
-      "rule":{
-        " ":"  "
-      },
+      "id": 1,
       "active": true,
-      "res-obfs":true
+      "res-obfs": false,
+      "rule": {
+        "You are Claude Code, Anthropic's official CLI for Claude":"You  are  Claude  Code,  Anthropic's  official  CLI  for  Claude"
+      }
     },
     {
-      "rule":{
-        "简体中文":"简体的中文"
-      },
+      "id": 2,
       "active": true,
-      "res-obfs":false
+      "res-obfs": false,
+      "rule": {
+        "You are Kilo Code, a highly skilled software engineer with extensive knowledge in many programming languages":"You  are  Kilo  Code,  a  highly  skilled  software  engineer  with  extensive  knowledge  in  many  programming  languages"
+      }
+    },
+    {
+      "id": 3,
+      "active": true,
+      "res-obfs": false,
+      "rule": {
+        "https://code.newcli.com/claude/beta": "https://code.newcli.com%2Fclaude%2Fbeta"
+      }
     }
   ]
-
 }
