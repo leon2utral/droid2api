@@ -23,6 +23,14 @@
       "rule": {
         "https://code.newcli.com/claude/beta": "https://code.newcli.com%2Fclaude%2Fbeta"
       }
+    },
+    {
+      "id": 4,
+      "active": true,
+      "res-obfs": false,
+      "rule": {
+        "搭配示例填充": "搭配示例填写"
+      }
     }
   ]
 }
