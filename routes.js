@@ -10,6 +10,12 @@ import { OpenAIResponseTransformer } from './transformers/response-openai.js';
 import { getApiKey } from './auth.js';
 import { getNextProxyAgent } from './proxy-manager.js';
 import { obfuscateRequestBody, deobfuscateResponseBody, DeobfuscateTransform } from './req-obfuscator.js';
+import { record401Error, get401Statistics, getTrackerStatus } from './error-tracker.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
@@ -347,9 +353,21 @@ async function handleDirectResponses(req, res) {
     if (!response.ok) {
       const errorText = await response.text();
       logError(`Endpoint error: ${response.status}`, new Error(errorText));
-      return res.status(response.status).json({ 
+
+      // 记录 401 错误
+      if (response.status === 401) {
+        record401Error({
+          endpoint: endpoint.base_url,
+          method: 'POST',
+          modelId: modelId,
+          modelType: model.type,
+          errorDetails: errorText
+        });
+      }
+
+      return res.status(response.status).json({
         error: `Endpoint returned ${response.status}`,
-        details: errorText 
+        details: errorText
       });
     }
 
@@ -505,9 +523,21 @@ async function handleDirectMessages(req, res) {
     if (!response.ok) {
       const errorText = await response.text();
       logError(`Endpoint error: ${response.status}`, new Error(errorText));
-      return res.status(response.status).json({ 
+
+      // 记录 401 错误
+      if (response.status === 401) {
+        record401Error({
+          endpoint: endpoint.base_url,
+          method: 'POST',
+          modelId: modelId,
+          modelType: model.type,
+          errorDetails: errorText
+        });
+      }
+
+      return res.status(response.status).json({
         error: `Endpoint returned ${response.status}`,
-        details: errorText 
+        details: errorText
       });
     }
 
@@ -623,6 +653,18 @@ async function handleCountTokens(req, res) {
     if (!response.ok) {
       const errorText = await response.text();
       logError(`Count tokens error: ${response.status}`, new Error(errorText));
+
+      // 记录 401 错误
+      if (response.status === 401) {
+        record401Error({
+          endpoint: countTokensUrl,
+          method: 'POST',
+          modelId: modelId,
+          modelType: model.type,
+          errorDetails: errorText
+        });
+      }
+
       return res.status(response.status).json({
         error: `Endpoint returned ${response.status}`,
         details: errorText
@@ -642,6 +684,42 @@ async function handleCountTokens(req, res) {
     });
   }
 }
+
+// Status 页面 - 返回 HTML 页面
+router.get('/status', (req, res) => {
+  logInfo('GET /status');
+
+  try {
+    const statusPagePath = path.join(__dirname, 'public', 'status.html');
+    res.sendFile(statusPagePath);
+  } catch (error) {
+    logError('Error in GET /status', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+});
+
+// Status API - 返回 JSON 数据
+router.get('/status/api', (req, res) => {
+  logInfo('GET /status/api');
+
+  try {
+    const days = parseInt(req.query.days) || 3;
+    const validDays = Math.min(Math.max(1, days), 3);
+
+    const statistics = get401Statistics(validDays);
+
+    res.json(statistics);
+  } catch (error) {
+    logError('Error in GET /status/api', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+});
 
 // 注册路由
 router.post('/v1/chat/completions', handleChatCompletions);

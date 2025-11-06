@@ -3,6 +3,12 @@ import { loadConfig, isDevMode, getPort } from './config.js';
 import { logInfo, logError } from './logger.js';
 import router from './routes.js';
 import { initializeAuth } from './auth.js';
+import { initializeErrorTracker } from './error-tracker.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -22,6 +28,9 @@ app.use((req, res, next) => {
 
 app.use(router);
 
+// 提供静态文件服务（用于 status 页面）
+app.use('/static', express.static(path.join(__dirname, 'public')));
+
 app.get('/', (req, res) => {
   res.json({
     name: 'droid2api',
@@ -32,7 +41,8 @@ app.get('/', (req, res) => {
       'POST /v1/chat/completions',
       'POST /v1/responses',
       'POST /v1/messages',
-      'POST /v1/messages/count_tokens'
+      'POST /v1/messages/count_tokens',
+      'GET /status - 401 Error Statistics Dashboard'
     ]
   });
 });
@@ -115,7 +125,10 @@ app.use((err, req, res, next) => {
     // Initialize auth system (load and setup API key if needed)
     // This won't throw error if no auth config is found - will use client auth
     await initializeAuth();
-    
+
+    // Initialize 401 error tracker
+    initializeErrorTracker();
+
     const PORT = getPort();
   logInfo(`Starting server on port ${PORT}...`);
   
@@ -128,6 +141,7 @@ app.use((err, req, res, next) => {
       logInfo('  POST /v1/responses');
       logInfo('  POST /v1/messages');
       logInfo('  POST /v1/messages/count_tokens');
+      logInfo('  GET  /status - 401 Error Statistics Dashboard');
     })
     .on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
