@@ -59,34 +59,42 @@ function cleanupOldRecords() {
 
 /**
  * 获取指定时间范围内的 401 错误记录
- * @param {number} days - 查询最近几天的记录 (1, 2, 或 3)
+ * @param {string|number} timeRange - 时间范围，可以是 "6h", "12h" 或天数 (1, 2, 3)
  * @returns {Array} 错误记录数组
  */
-export function get401Records(days = 3) {
-  // 确保 days 在有效范围内
-  const validDays = Math.min(Math.max(1, days), RETENTION_DAYS);
-  
+export function get401Records(timeRange = 1) {
   const now = Date.now();
-  const cutoffTime = now - (validDays * 24 * 60 * 60 * 1000);
-  
+  let cutoffTime;
+  let rangeDescription;
+
+  // 解析时间范围
+  if (typeof timeRange === 'string' && timeRange.endsWith('h')) {
+    // 小时格式，如 "6h", "12h"
+    const hours = parseInt(timeRange);
+    cutoffTime = now - (hours * 60 * 60 * 1000);
+    rangeDescription = `${hours} hour(s)`;
+  } else {
+    // 天数格式
+    const days = Math.min(Math.max(1, parseInt(timeRange)), RETENTION_DAYS);
+    cutoffTime = now - (days * 24 * 60 * 60 * 1000);
+    rangeDescription = `${days} day(s)`;
+  }
+
   const records = error401Records.filter(record => record.timestamp >= cutoffTime);
-  
-  logDebug(`Retrieved ${records.length} 401 error records for last ${validDays} day(s)`);
-  
+
+  logDebug(`Retrieved ${records.length} 401 error records for last ${rangeDescription}`);
+
   return records;
 }
 
 /**
- * 将时间戳向下取整到最近的5分钟
+ * 将时间戳向下取整到最近的1分钟
  * @param {number} timestamp - 时间戳（毫秒）
- * @returns {string} ISO格式的5分钟时间槽
+ * @returns {string} ISO格式的1分钟时间槽
  */
-function roundToFiveMinutes(timestamp) {
+function roundToOneMinute(timestamp) {
   const date = new Date(timestamp);
-  const minutes = date.getMinutes();
-  const roundedMinutes = Math.floor(minutes / 5) * 5;
 
-  date.setMinutes(roundedMinutes);
   date.setSeconds(0);
   date.setMilliseconds(0);
 
@@ -95,21 +103,21 @@ function roundToFiveMinutes(timestamp) {
 
 /**
  * 获取统计信息
- * @param {number} days - 统计最近几天的数据
+ * @param {string|number} timeRange - 时间范围，可以是 "6h", "12h" 或天数 (1, 2, 3)
  * @returns {Object} 统计信息
  */
-export function get401Statistics(days = 3) {
-  const records = get401Records(days);
+export function get401Statistics(timeRange = 1) {
+  const records = get401Records(timeRange);
 
-  // 按5分钟分组统计
-  const fiveMinuteStats = {};
+  // 按1分钟分组统计
+  const oneMinuteStats = {};
   const modelStats = {};
   const endpointStats = {};
 
   records.forEach(record => {
-    // 按5分钟统计
-    const fiveMinuteSlot = roundToFiveMinutes(record.timestamp);
-    fiveMinuteStats[fiveMinuteSlot] = (fiveMinuteStats[fiveMinuteSlot] || 0) + 1;
+    // 按1分钟统计
+    const oneMinuteSlot = roundToOneMinute(record.timestamp);
+    oneMinuteStats[oneMinuteSlot] = (oneMinuteStats[oneMinuteSlot] || 0) + 1;
 
     // 按模型统计
     modelStats[record.modelId] = (modelStats[record.modelId] || 0) + 1;
@@ -121,11 +129,11 @@ export function get401Statistics(days = 3) {
   return {
     totalCount: records.length,
     timeRange: {
-      days: days,
+      range: timeRange,
       from: records.length > 0 ? Math.min(...records.map(r => r.timestamp)) : null,
       to: records.length > 0 ? Math.max(...records.map(r => r.timestamp)) : null
     },
-    fiveMinuteStats,
+    oneMinuteStats,
     modelStats,
     endpointStats,
     records: records.map(r => ({

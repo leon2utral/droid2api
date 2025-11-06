@@ -706,10 +706,10 @@ router.get('/status/api', (req, res) => {
   logInfo('GET /status/api');
 
   try {
-    const days = parseInt(req.query.days) || 3;
-    const validDays = Math.min(Math.max(1, days), 3);
+    // 支持新的 range 参数，同时兼容旧的 days 参数
+    const timeRange = req.query.range || req.query.days || '1';
 
-    const statistics = get401Statistics(validDays);
+    const statistics = get401Statistics(timeRange);
 
     res.json(statistics);
   } catch (error) {

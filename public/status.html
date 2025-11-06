@@ -194,9 +194,11 @@
         <div class="controls">
             <label for="timeRange">时间范围：</label>
             <select id="timeRange">
-                <option value="1">最近 1 天</option>
+                <option value="6h">最近 6 小时</option>
+                <option value="12h">最近 12 小时</option>
+                <option value="1" selected>最近 1 天</option>
                 <option value="2">最近 2 天</option>
-                <option value="3" selected>最近 3 天</option>
+                <option value="3">最近 3 天</option>
             </select>
             <button onclick="loadData()">🔄 刷新数据</button>
             <button onclick="toggleAutoRefresh()">⏱️ <span id="autoRefreshText">启用自动刷新</span></button>
@@ -228,7 +230,7 @@
         </div>
 
         <div class="chart-container">
-            <h2>📊 时间分布图（每5分钟）</h2>
+            <h2>📊 时间分布图（每分钟）</h2>
             <div class="chart-wrapper">
                 <canvas id="timeChart"></canvas>
             </div>
@@ -286,16 +288,16 @@
 
         // 加载数据
         async function loadData() {
-            const days = document.getElementById('timeRange').value;
-            
+            const timeRange = document.getElementById('timeRange').value;
+
             try {
-                const response = await fetch(`/status/api?days=${days}`);
+                const response = await fetch(`/status/api?range=${encodeURIComponent(timeRange)}`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-                
+
                 const data = await response.json();
-                updateUI(data);
+                updateUI(data, timeRange);
                 document.getElementById('errorMessage').style.display = 'none';
             } catch (error) {
                 console.error('Error loading data:', error);
@@ -305,10 +307,18 @@
         }
 
         // 更新 UI
-        function updateUI(data) {
+        function updateUI(data, timeRange) {
             // 更新统计卡片
             document.getElementById('totalErrors').textContent = data.totalCount || 0;
-            document.getElementById('timeRangeValue').textContent = `${data.timeRange.days} 天`;
+
+            // 格式化时间范围显示
+            let rangeText;
+            if (typeof timeRange === 'string' && timeRange.endsWith('h')) {
+                rangeText = `${parseInt(timeRange)} 小时`;
+            } else {
+                rangeText = `${timeRange} 天`;
+            }
+            document.getElementById('timeRangeValue').textContent = rangeText;
 
             // 更新时间记录
             if (data.records && data.records.length > 0) {
@@ -323,7 +333,7 @@
             }
 
             // 更新时间分布图
-            updateTimeChart(data.fiveMinuteStats);
+            updateTimeChart(data.oneMinuteStats, timeRange);
 
             // 更新模型分布图
             updateModelChart(data.modelStats);
@@ -335,48 +345,119 @@
             document.getElementById('lastUpdated').textContent = formatLocalTime(Date.now());
         }
 
+        // 生成完整的时间序列
+        function generateFullTimeRange(timeRange) {
+            const now = new Date();
+            // 将当前时间向下取整到分钟
+            now.setSeconds(0);
+            now.setMilliseconds(0);
+
+            let totalMinutes;
+            if (typeof timeRange === 'string' && timeRange.endsWith('h')) {
+                // 小时格式
+                const hours = parseInt(timeRange);
+                totalMinutes = hours * 60;
+            } else {
+                // 天数格式
+                const days = parseInt(timeRange);
+                totalMinutes = days * 24 * 60;
+            }
+
+            const timeSlots = [];
+            for (let i = totalMinutes - 1; i >= 0; i--) {
+                const time = new Date(now.getTime() - i * 60 * 1000);
+                timeSlots.push(time.toISOString());
+            }
+
+            return timeSlots;
+        }
+
         // 更新时间分布图
-        function updateTimeChart(fiveMinuteStats) {
+        function updateTimeChart(oneMinuteStats, timeRange) {
             const ctx = document.getElementById('timeChart').getContext('2d');
 
-            // 转换数据并按时间排序
-            const sortedData = Object.entries(fiveMinuteStats || {})
-                .sort((a, b) => new Date(a[0]) - new Date(b[0]));
+            // 生成完整的时间序列
+            const fullTimeRange = generateFullTimeRange(timeRange);
 
-            const labels = sortedData.map(([time]) => {
-                const date = new Date(time);
-                return date.toLocaleString('zh-CN', {
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: false
-                });
+            // 将实际数据映射到完整时间序列
+            const labels = [];
+            const values = [];
+
+            fullTimeRange.forEach(timeSlot => {
+                const date = new Date(timeSlot);
+
+                // 格式化标签 - 根据时间范围调整显示密度
+                let labelFormat;
+                if (typeof timeRange === 'string' && timeRange.endsWith('h')) {
+                    // 小时范围：显示更多细节
+                    labelFormat = date.toLocaleString('zh-CN', {
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                    });
+                } else {
+                    // 天数范围：简化显示
+                    labelFormat = date.toLocaleString('zh-CN', {
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                    });
+                }
+
+                labels.push(labelFormat);
+
+                // 查找对应的数据值
+                const count = oneMinuteStats[timeSlot] || 0;
+                values.push(count);
             });
-
-            const values = sortedData.map(([, count]) => count);
 
             if (timeChart) {
                 timeChart.destroy();
             }
 
+            // 创建混合图表：柱状图 + 折线图
             timeChart = new Chart(ctx, {
-                type: 'line',
+                type: 'bar',
                 data: {
                     labels: labels,
-                    datasets: [{
-                        label: '401 错误数量',
-                        data: values,
-                        borderColor: '#ff6b9d',
-                        backgroundColor: 'rgba(255, 182, 193, 0.3)',
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4
-                    }]
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: '错误数量',
+                            data: values,
+                            backgroundColor: 'rgba(255, 182, 193, 0.7)',
+                            borderColor: 'rgba(255, 182, 193, 1)',
+                            borderWidth: 1,
+                            barPercentage: 1.0,      // 柱子占据整个类别宽度（无间隙）
+                            categoryPercentage: 1.0,  // 类别占据整个可用空间
+                            order: 2
+                        },
+                        {
+                            type: 'line',
+                            label: '趋势线',
+                            data: values,
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            order: 1
+                        }
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
                     plugins: {
                         legend: {
                             display: true,
@@ -384,14 +465,35 @@
                         },
                         tooltip: {
                             mode: 'index',
-                            intersect: false
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y + ' 个错误';
+                                    }
+                                    return label;
+                                }
+                            }
                         }
                     },
                     scales: {
+                        x: {
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                autoSkip: true,
+                                maxTicksLimit: 20
+                            }
+                        },
                         y: {
                             beginAtZero: true,
                             ticks: {
-                                stepSize: 1
+                                stepSize: 1,
+                                precision: 0
                             }
                         }
                     }
@@ -525,7 +627,7 @@
                 autoRefreshInterval = null;
                 document.getElementById('autoRefreshText').textContent = '启用自动刷新';
             } else {
-                autoRefreshInterval = setInterval(loadData, 30000); // 每30秒刷新
+                autoRefreshInterval = setInterval(loadData, 60000); // 每60秒（1分钟）刷新
                 document.getElementById('autoRefreshText').textContent = '禁用自动刷新';
                 loadData(); // 立即刷新一次
             }
