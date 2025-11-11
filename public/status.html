@@ -194,11 +194,10 @@
         <div class="controls">
             <label for="timeRange">时间范围：</label>
             <select id="timeRange">
-                <option value="6h">最近 6 小时</option>
-                <option value="12h">最近 12 小时</option>
                 <option value="1" selected>最近 1 天</option>
-                <option value="2">最近 2 天</option>
                 <option value="3">最近 3 天</option>
+                <option value="7">最近 7 天</option>
+                <option value="15">最近 15 天</option>
             </select>
             <button onclick="loadData()">🔄 刷新数据</button>
             <button onclick="toggleAutoRefresh()">⏱️ <span id="autoRefreshText">启用自动刷新</span></button>
@@ -230,7 +229,17 @@
         </div>
 
         <div class="chart-container">
-            <h2>📊 时间分布图（每分钟）</h2>
+            <h2>📊 北京时间分布图（按天叠加）</h2>
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                横轴：北京时间 0:00 - 23:59（每分钟），纵轴：错误次数，不同日期用不同颜色表示
+            </p>
+            <div class="chart-wrapper">
+                <canvas id="beijingTimeChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <h2>📈 实际时间分布图（按分钟）</h2>
             <div class="chart-wrapper">
                 <canvas id="timeChart"></canvas>
             </div>
@@ -256,7 +265,7 @@
     </div>
 
     <script>
-        let timeChart, modelChart, endpointChart;
+        let beijingTimeChart, timeChart, modelChart, endpointChart;
         let autoRefreshInterval = null;
 
         // 格式化时间戳为本地时间
@@ -332,6 +341,9 @@
                 document.getElementById('newestRecord').textContent = '-';
             }
 
+            // 更新北京时间分布图
+            updateBeijingTimeChart(data.beijingTimeDistribution);
+
             // 更新时间分布图
             updateTimeChart(data.oneMinuteStats, timeRange);
 
@@ -343,6 +355,155 @@
 
             // 更新最后更新时间
             document.getElementById('lastUpdated').textContent = formatLocalTime(Date.now());
+        }
+
+        // 更新北京时间分布图
+        function updateBeijingTimeChart(beijingTimeDistribution) {
+            const ctx = document.getElementById('beijingTimeChart').getContext('2d');
+
+            if (beijingTimeChart) {
+                beijingTimeChart.destroy();
+            }
+
+            // 如果没有数据，显示空图表
+            if (!beijingTimeDistribution || !beijingTimeDistribution.distributionData || beijingTimeDistribution.distributionData.length === 0) {
+                beijingTimeChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: []
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: true },
+                            title: {
+                                display: true,
+                                text: '暂无数据'
+                            }
+                        }
+                    }
+                });
+                return;
+            }
+
+            // 生成横轴标签（0:00 - 23:59，每分钟一个点，但只显示部分标签）
+            const labels = [];
+            for (let i = 0; i < 1440; i++) {
+                const hour = Math.floor(i / 60);
+                const minute = i % 60;
+                labels.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+            }
+
+            // 为每个日期创建一个数据集
+            const colors = [
+                'rgba(255, 99, 132, 0.8)',   // 红色
+                'rgba(54, 162, 235, 0.8)',   // 蓝色
+                'rgba(255, 206, 86, 0.8)',   // 黄色
+                'rgba(75, 192, 192, 0.8)',   // 青色
+                'rgba(153, 102, 255, 0.8)',  // 紫色
+                'rgba(255, 159, 64, 0.8)',   // 橙色
+                'rgba(201, 203, 207, 0.8)',  // 灰色
+                'rgba(255, 99, 255, 0.8)',   // 粉红
+                'rgba(99, 255, 132, 0.8)',   // 绿色
+                'rgba(99, 132, 255, 0.8)',   // 深蓝
+                'rgba(255, 192, 203, 0.8)',  // 浅粉
+                'rgba(144, 238, 144, 0.8)',  // 浅绿
+                'rgba(255, 218, 185, 0.8)',  // 桃色
+                'rgba(176, 224, 230, 0.8)',  // 粉蓝
+                'rgba(221, 160, 221, 0.8)'   // 紫罗兰
+            ];
+
+            const datasets = beijingTimeDistribution.distributionData.map((dateData, index) => {
+                const colorIndex = index % colors.length;
+                return {
+                    label: dateData.date,
+                    data: dateData.distribution,
+                    borderColor: colors[colorIndex],
+                    backgroundColor: colors[colorIndex].replace('0.8', '0.2'),
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    pointHitRadius: 5
+                };
+            });
+
+            beijingTimeChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                title: function(context) {
+                                    const label = context[0].label;
+                                    return `北京时间: ${label}`;
+                                },
+                                label: function(context) {
+                                    const date = context.dataset.label;
+                                    const count = context.parsed.y;
+                                    return `${date}: ${count} 个错误`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: '北京时间 (小时:分钟)'
+                            },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                autoSkip: true,
+                                maxTicksLimit: 24, // 大约每小时显示一个标签
+                                callback: function(value, index) {
+                                    // 只显示整点时间
+                                    if (index % 60 === 0) {
+                                        const hour = Math.floor(index / 60);
+                                        return `${String(hour).padStart(2, '0')}:00`;
+                                    }
+                                    return null;
+                                }
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: '错误次数'
+                            },
+                            ticks: {
+                                stepSize: 1,
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         // 生成完整的时间序列

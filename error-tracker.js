@@ -8,8 +8,8 @@ import { logInfo, logDebug } from './logger.js';
 // 存储 401 错误记录的数组
 let error401Records = [];
 
-// 数据保留时间（3天，单位：毫秒）
-const RETENTION_DAYS = 3;
+// 数据保留时间（15天，单位：毫秒）
+const RETENTION_DAYS = 15;
 const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
 // 自动清理间隔（每小时清理一次）
@@ -102,8 +102,66 @@ function roundToOneMinute(timestamp) {
 }
 
 /**
+ * 将时间戳转换为北京时间的日期和分钟索引
+ * @param {number} timestamp - 时间戳（毫秒）
+ * @returns {Object} {date: 'YYYY-MM-DD', minuteOfDay: 0-1439, timeStr: 'HH:MM'}
+ */
+function toBeijingTimeMinute(timestamp) {
+  // 北京时间是 UTC+8
+  const beijingOffset = 8 * 60 * 60 * 1000;
+  const beijingTime = new Date(timestamp + beijingOffset);
+  
+  // 获取 UTC 形式的日期（实际是北京时间）
+  const year = beijingTime.getUTCFullYear();
+  const month = String(beijingTime.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(beijingTime.getUTCDate()).padStart(2, '0');
+  const date = `${year}-${month}-${day}`;
+  
+  const hour = beijingTime.getUTCHours();
+  const minute = beijingTime.getUTCMinutes();
+  const minuteOfDay = hour * 60 + minute; // 0-1439
+  const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  
+  return { date, minuteOfDay, timeStr, hour, minute };
+}
+
+/**
+ * 获取按北京时间 0-24 小时分布的统计信息
+ * @param {string|number} timeRange - 时间范围，天数 (1, 3, 7, 15)
+ * @returns {Object} 按北京时间分布的统计信息
+ */
+function getBeijingTimeDistribution(timeRange = 1) {
+  const records = get401Records(timeRange);
+  
+  // 按日期分组统计
+  const byDate = {};
+  
+  records.forEach(record => {
+    const { date, minuteOfDay } = toBeijingTimeMinute(record.timestamp);
+    
+    if (!byDate[date]) {
+      byDate[date] = new Array(1440).fill(0); // 1440 分钟 = 24 小时 * 60 分钟
+    }
+    
+    byDate[date][minuteOfDay]++;
+  });
+  
+  // 转换为前端需要的格式
+  const dateList = Object.keys(byDate).sort(); // 按日期排序
+  const distributionData = dateList.map(date => ({
+    date,
+    distribution: byDate[date]
+  }));
+  
+  return {
+    dateList,
+    distributionData
+  };
+}
+
+/**
  * 获取统计信息
- * @param {string|number} timeRange - 时间范围，可以是 "6h", "12h" 或天数 (1, 2, 3)
+ * @param {string|number} timeRange - 时间范围，可以是 "6h", "12h" 或天数 (1, 2, 3, 7, 15)
  * @returns {Object} 统计信息
  */
 export function get401Statistics(timeRange = 1) {
@@ -126,6 +184,12 @@ export function get401Statistics(timeRange = 1) {
     endpointStats[record.endpoint] = (endpointStats[record.endpoint] || 0) + 1;
   });
 
+  // 获取北京时间分布数据（仅用于天数范围）
+  let beijingTimeDistribution = null;
+  if (typeof timeRange === 'number' || (typeof timeRange === 'string' && !timeRange.endsWith('h'))) {
+    beijingTimeDistribution = getBeijingTimeDistribution(timeRange);
+  }
+
   return {
     totalCount: records.length,
     timeRange: {
@@ -136,6 +200,7 @@ export function get401Statistics(timeRange = 1) {
     oneMinuteStats,
     modelStats,
     endpointStats,
+    beijingTimeDistribution,
     records: records.map(r => ({
       timestamp: r.timestamp,
       timestampISO: r.timestampISO,
