@@ -361,7 +361,8 @@ async function handleDirectResponses(req, res) {
           method: 'POST',
           modelId: modelId,
           modelType: model.type,
-          errorDetails: errorText
+          errorDetails: errorText,
+          apiKey: authHeader  // 传入API key用于去重识别
         });
       }
 
@@ -531,7 +532,8 @@ async function handleDirectMessages(req, res) {
           method: 'POST',
           modelId: modelId,
           modelType: model.type,
-          errorDetails: errorText
+          errorDetails: errorText,
+          apiKey: authHeader  // 传入API key用于去重识别
         });
       }
 
@@ -661,7 +663,8 @@ async function handleCountTokens(req, res) {
           method: 'POST',
           modelId: modelId,
           modelType: model.type,
-          errorDetails: errorText
+          errorDetails: errorText,
+          apiKey: authHeader  // 传入API key用于去重识别
         });
       }
 
@@ -708,8 +711,12 @@ router.get('/status/api', (req, res) => {
   try {
     // 支持新的 range 参数，同时兼容旧的 days 参数
     const timeRange = req.query.range || req.query.days || '1';
+    
+    // 支持 filter 参数：'all'（默认） 或 'first-fail'（只统计首次401）
+    const filterMode = req.query.filter || 'all';
+    const onlyFirstFail = filterMode === 'first-fail';
 
-    const statistics = get401Statistics(timeRange);
+    const statistics = get401Statistics(timeRange, onlyFirstFail);
 
     res.json(statistics);
   } catch (error) {

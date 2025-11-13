@@ -1,12 +1,17 @@
 import { logInfo, logDebug } from './logger.js';
+import crypto from 'crypto';
 
 /**
  * 401 错误追踪器
  * 在内存中存储 401 错误记录，自动清理超过 3 天的记录
+ * 优化：只统计每个key首次出现401的时间点，避免重复统计造成的数据污染
  */
 
 // 存储 401 错误记录的数组
 let error401Records = [];
+
+// 存储已失效的key集合（用于去重）
+const failedKeysSet = new Set();
 
 // 数据保留时间（15天，单位：毫秒）
 const RETENTION_DAYS = 15;
@@ -16,6 +21,28 @@ const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
+ * 生成key的hash标识（用于去重，保护隐私）
+ * @param {string} apiKey - API密钥
+ * @returns {string} - Hash值（SHA256前12位）
+ */
+function generateKeyHash(apiKey) {
+  if (!apiKey || typeof apiKey !== 'string') {
+    return 'unknown';
+  }
+  
+  // 移除 "Bearer " 前缀（如果存在）
+  const key = apiKey.replace(/^Bearer\s+/i, '').trim();
+  
+  if (!key) {
+    return 'unknown';
+  }
+  
+  // 生成SHA256 hash，取前12位
+  const hash = crypto.createHash('sha256').update(key).digest('hex');
+  return hash.substring(0, 12);
+}
+
+/**
  * 记录一个 401 错误
  * @param {Object} errorInfo - 错误信息
  * @param {string} errorInfo.endpoint - 请求的端点 URL
@@ -23,21 +50,39 @@ const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
  * @param {string} errorInfo.modelId - 模型 ID
  * @param {string} errorInfo.modelType - 模型类型 (openai/anthropic/common)
  * @param {string} errorInfo.errorDetails - 错误详情
+ * @param {string} errorInfo.apiKey - API密钥（用于去重识别）
  */
 export function record401Error(errorInfo) {
+  const now = Date.now();
+  const keyHash = generateKeyHash(errorInfo.apiKey);
+  
+  // 检查是否为首次失效
+  const isFirstFail = !failedKeysSet.has(keyHash);
+  
+  // 记录到失效集合
+  if (isFirstFail) {
+    failedKeysSet.add(keyHash);
+  }
+  
   const record = {
-    timestamp: Date.now(),
+    timestamp: now,
     timestampISO: new Date().toISOString(),
     endpoint: errorInfo.endpoint || 'unknown',
     method: errorInfo.method || 'POST',
     modelId: errorInfo.modelId || 'unknown',
     modelType: errorInfo.modelType || 'unknown',
-    errorDetails: errorInfo.errorDetails || ''
+    errorDetails: errorInfo.errorDetails || '',
+    keyHash: keyHash,           // 保存key hash（隐私保护）
+    isFirstFail: isFirstFail    // 标记是否为首次失效
   };
 
   error401Records.push(record);
   
-  logInfo(`401 Error recorded: ${record.method} ${record.endpoint} (Model: ${record.modelId})`);
+  if (isFirstFail) {
+    logInfo(`🔴 401 Error (FIRST FAIL): ${record.method} ${record.endpoint} (Model: ${record.modelId}, Key: ${keyHash})`);
+  } else {
+    logInfo(`🟠 401 Error (repeated): ${record.method} ${record.endpoint} (Model: ${record.modelId}, Key: ${keyHash})`);
+  }
   logDebug('401 Error details', record);
 }
 
@@ -49,11 +94,28 @@ function cleanupOldRecords() {
   const cutoffTime = now - RETENTION_MS;
   
   const beforeCount = error401Records.length;
+  
+  // 清理旧记录
   error401Records = error401Records.filter(record => record.timestamp >= cutoffTime);
+  
   const afterCount = error401Records.length;
   
+  // 同步清理失效key集合：如果某个key的所有记录都被清理了，则从集合中移除
   if (beforeCount > afterCount) {
-    logInfo(`Cleaned up ${beforeCount - afterCount} old 401 error records (older than ${RETENTION_DAYS} days)`);
+    // 重建失效key集合（只保留当前记录中存在的key）
+    const currentKeyHashes = new Set(error401Records.map(r => r.keyHash));
+    
+    // 从failedKeysSet中移除不再存在于记录中的key
+    const keysToRemove = [];
+    for (const keyHash of failedKeysSet) {
+      if (!currentKeyHashes.has(keyHash)) {
+        keysToRemove.push(keyHash);
+      }
+    }
+    
+    keysToRemove.forEach(keyHash => failedKeysSet.delete(keyHash));
+    
+    logInfo(`Cleaned up ${beforeCount - afterCount} old 401 error records and ${keysToRemove.length} expired keys (older than ${RETENTION_DAYS} days)`);
   }
 }
 
@@ -128,10 +190,16 @@ function toBeijingTimeMinute(timestamp) {
 /**
  * 获取按北京时间 0-24 小时分布的统计信息
  * @param {string|number} timeRange - 时间范围，天数 (1, 3, 7, 15)
+ * @param {boolean} onlyFirstFail - 是否只统计首次401
  * @returns {Object} 按北京时间分布的统计信息
  */
-function getBeijingTimeDistribution(timeRange = 1) {
-  const records = get401Records(timeRange);
+function getBeijingTimeDistribution(timeRange = 1, onlyFirstFail = false) {
+  const allRecords = get401Records(timeRange);
+  
+  // 根据参数决定使用哪些记录
+  const records = onlyFirstFail 
+    ? allRecords.filter(r => r.isFirstFail === true)
+    : allRecords;
   
   // 按日期分组统计
   const byDate = {};
@@ -162,15 +230,22 @@ function getBeijingTimeDistribution(timeRange = 1) {
 /**
  * 获取统计信息
  * @param {string|number} timeRange - 时间范围，可以是 "6h", "12h" 或天数 (1, 2, 3, 7, 15)
+ * @param {boolean} onlyFirstFail - 是否只统计首次401（默认false，统计所有）
  * @returns {Object} 统计信息
  */
-export function get401Statistics(timeRange = 1) {
-  const records = get401Records(timeRange);
+export function get401Statistics(timeRange = 1, onlyFirstFail = false) {
+  const allRecords = get401Records(timeRange);
+  
+  // 根据参数决定使用哪些记录进行统计
+  const records = onlyFirstFail 
+    ? allRecords.filter(r => r.isFirstFail === true)
+    : allRecords;
 
   // 按1分钟分组统计
   const oneMinuteStats = {};
   const modelStats = {};
   const endpointStats = {};
+  const keyStats = {};
 
   records.forEach(record => {
     // 按1分钟统计
@@ -182,16 +257,35 @@ export function get401Statistics(timeRange = 1) {
 
     // 按端点统计
     endpointStats[record.endpoint] = (endpointStats[record.endpoint] || 0) + 1;
+    
+    // 按key统计（只统计首次失效）
+    if (record.isFirstFail && record.keyHash && record.keyHash !== 'unknown') {
+      keyStats[record.keyHash] = {
+        firstFailTime: record.timestamp,
+        firstFailTimeISO: record.timestampISO,
+        modelId: record.modelId,
+        endpoint: record.endpoint
+      };
+    }
   });
 
   // 获取北京时间分布数据（仅用于天数范围）
   let beijingTimeDistribution = null;
   if (typeof timeRange === 'number' || (typeof timeRange === 'string' && !timeRange.endsWith('h'))) {
-    beijingTimeDistribution = getBeijingTimeDistribution(timeRange);
+    beijingTimeDistribution = getBeijingTimeDistribution(timeRange, onlyFirstFail);
   }
+
+  // 统计首次失效和重复失效的数量
+  const firstFailCount = allRecords.filter(r => r.isFirstFail === true).length;
+  const repeatFailCount = allRecords.filter(r => r.isFirstFail === false).length;
 
   return {
     totalCount: records.length,
+    allRecordsCount: allRecords.length,  // 所有401记录数
+    firstFailCount: firstFailCount,       // 首次401数量
+    repeatFailCount: repeatFailCount,     // 重复401数量
+    uniqueFailedKeys: Object.keys(keyStats).length, // 失效key数量
+    filterMode: onlyFirstFail ? 'first-fail-only' : 'all',
     timeRange: {
       range: timeRange,
       from: records.length > 0 ? Math.min(...records.map(r => r.timestamp)) : null,
@@ -200,6 +294,7 @@ export function get401Statistics(timeRange = 1) {
     oneMinuteStats,
     modelStats,
     endpointStats,
+    keyStats,
     beijingTimeDistribution,
     records: records.map(r => ({
       timestamp: r.timestamp,
@@ -207,7 +302,9 @@ export function get401Statistics(timeRange = 1) {
       endpoint: r.endpoint,
       method: r.method,
       modelId: r.modelId,
-      modelType: r.modelType
+      modelType: r.modelType,
+      keyHash: r.keyHash,
+      isFirstFail: r.isFirstFail
     }))
   };
 }
@@ -234,8 +331,13 @@ export function initializeErrorTracker() {
  * 获取追踪器状态信息
  */
 export function getTrackerStatus() {
+  const firstFailRecords = error401Records.filter(r => r.isFirstFail === true);
+  
   return {
     totalRecords: error401Records.length,
+    firstFailRecords: firstFailRecords.length,
+    repeatFailRecords: error401Records.length - firstFailRecords.length,
+    uniqueFailedKeys: failedKeysSet.size,
     retentionDays: RETENTION_DAYS,
     oldestRecord: error401Records.length > 0 
       ? new Date(Math.min(...error401Records.map(r => r.timestamp))).toISOString()
