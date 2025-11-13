@@ -8,15 +8,15 @@
   "endpoint": [
     {
       "name": "openai",
-      "base_url": "https://app.factory.ai/api/llm/o/v1/responses"
+      "base_url": "https://api.factory.ai/api/llm/o/v1/responses"
     },
     {
       "name": "anthropic",
-      "base_url": "https://app.factory.ai/api/llm/a/v1/messages"
+      "base_url": "https://api.factory.ai/api/llm/a/v1/messages"
     },
     {
       "name": "common",
-      "base_url": "https://app.factory.ai/api/llm/o/v1/chat/completions"
+      "base_url": "https://api.factory.ai/api/llm/o/v1/chat/completions"
     }
   ],
   "proxies": [],
@@ -58,6 +58,6 @@
     }
   ],
   "dev_mode": false,
-  "user_agent": "factory-cli/0.22.11",
+  "user_agent": "factory-cli/0.25.1",
   "system_prompt": "You are Droid, an AI software engineering agent built by Factory.\n\n"
 }
