@@ -29,6 +29,13 @@
       "provider": "anthropic"
     },
     {
+      "name": "Opus 4.5",
+      "id": "claude-opus-4-5-20251101",
+      "type": "anthropic",
+      "reasoning": "auto",
+      "provider": "anthropic"
+    },
+    {
       "name": "Haiku 4.5",
       "id": "claude-haiku-4-5-20251001",
       "type": "anthropic",
@@ -41,20 +48,6 @@
       "type": "anthropic",
       "reasoning": "auto",
       "provider": "anthropic"
-    },
-    {
-      "name": "GPT-5",
-      "id": "gpt-5-2025-08-07",
-      "type": "openai",
-      "reasoning": "auto",
-      "provider": "openai"
-    },
-    {
-      "name": "GPT-5-Codex",
-      "id": "gpt-5-codex",
-      "type": "openai",
-      "reasoning": "off",
-      "provider": "openai"
     },
     {
       "name": "GPT-5.1",
@@ -86,6 +79,6 @@
     }
   ],
   "dev_mode": false,
-  "user_agent": "factory-cli/0.25.2",
+  "user_agent": "factory-cli/0.27.1",
   "system_prompt": "You are Droid, an AI software engineering agent built by Factory.\n\n"
 }
