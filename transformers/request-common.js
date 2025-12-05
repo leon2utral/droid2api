@@ -44,7 +44,7 @@ export function transformToCommon(openaiRequest) {
   if (reasoningLevel === 'auto') {
     // Auto mode: preserve original request's reasoning_effort field exactly as-is
     // If original request has reasoning_effort field, keep it; otherwise don't add one
-  } else if (reasoningLevel && ['low', 'medium', 'high'].includes(reasoningLevel)) {
+  } else if (reasoningLevel && ['low', 'medium', 'high', 'xhigh'].includes(reasoningLevel)) {
     // Specific level: override with model configuration
     commonRequest.reasoning_effort = reasoningLevel;
   } else {

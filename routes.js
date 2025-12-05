@@ -328,7 +328,7 @@ async function handleDirectResponses(req, res) {
     if (reasoningLevel === 'auto') {
       // Auto模式：保持原始请求的reasoning字段不变
       // 如果原始请求有reasoning字段就保留，没有就不添加
-    } else if (reasoningLevel && ['low', 'medium', 'high'].includes(reasoningLevel)) {
+    } else if (reasoningLevel && ['low', 'medium', 'high', 'xhigh'].includes(reasoningLevel)) {
       modifiedRequest.reasoning = {
         effort: reasoningLevel,
         summary: 'auto'
@@ -496,11 +496,12 @@ async function handleDirectMessages(req, res) {
     if (reasoningLevel === 'auto') {
       // Auto模式：保持原始请求的thinking字段不变
       // 如果原始请求有thinking字段就保留，没有就不添加
-    } else if (reasoningLevel && ['low', 'medium', 'high'].includes(reasoningLevel)) {
+    } else if (reasoningLevel && ['low', 'medium', 'high', 'xhigh'].includes(reasoningLevel)) {
       const budgetTokens = {
         'low': 4096,
         'medium': 12288,
-        'high': 24576
+        'high': 24576,
+        'xhigh': 40960
       };
       
       modifiedRequest.thinking = {

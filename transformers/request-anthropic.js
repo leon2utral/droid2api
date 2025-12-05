@@ -119,12 +119,13 @@ export function transformToAnthropic(openaiRequest) {
       anthropicRequest.thinking = openaiRequest.thinking;
     }
     // If original request has no thinking field, don't add one
-  } else if (reasoningLevel && ['low', 'medium', 'high'].includes(reasoningLevel)) {
+  } else if (reasoningLevel && ['low', 'medium', 'high', 'xhigh'].includes(reasoningLevel)) {
     // Specific level: override with model configuration
     const budgetTokens = {
       'low': 4096,
       'medium': 12288,
-      'high': 24576
+      'high': 24576,
+      'xhigh': 24576
     };
     
     anthropicRequest.thinking = {
@@ -189,7 +190,7 @@ export function getAnthropicHeaders(authHeader, clientHeaders = {}, isStreaming 
   if (reasoningLevel === 'auto') {
     // Auto mode: don't modify anthropic-beta header, preserve original
     // betaValues remain unchanged from client headers
-  } else if (reasoningLevel && ['low', 'medium', 'high'].includes(reasoningLevel)) {
+  } else if (reasoningLevel && ['low', 'medium', 'high', 'xhigh'].includes(reasoningLevel)) {
     // Add thinking beta if not already present
     if (!betaValues.includes(thinkingBeta)) {
       betaValues.push(thinkingBeta);
