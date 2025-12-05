@@ -100,7 +100,7 @@ export function transformToOpenAI(openaiRequest) {
       targetRequest.reasoning = openaiRequest.reasoning;
     }
     // If original request has no reasoning field, don't add one
-  } else if (reasoningLevel && ['low', 'medium', 'high'].includes(reasoningLevel)) {
+  } else if (reasoningLevel && ['low', 'medium', 'high', 'xhigh'].includes(reasoningLevel)) {
     // Specific level: override with model configuration
     targetRequest.reasoning = {
       effort: reasoningLevel,

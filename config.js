@@ -58,7 +58,7 @@ export function getModelReasoning(modelId) {
     return null;
   }
   const reasoningLevel = model.reasoning.toLowerCase();
-  if (['low', 'medium', 'high', 'auto'].includes(reasoningLevel)) {
+  if (['low', 'medium', 'high', 'xhigh', 'auto'].includes(reasoningLevel)) {
     return reasoningLevel;
   }
   return null;
