@@ -31,6 +31,22 @@
       "rule": {
         "搭配示例填充": "搭配示例填写"
       }
+    },
+    {
+      "id": 5,
+      "active": true,
+      "res-obfs": false,
+      "rule": {
+        "This is a reminder that your todo list is currently empty": "This  is  a  reminder  that your  todo  list  is  currently  empty"
+      }
+    },
+    {
+      "id": 6,
+      "active": true,
+      "res-obfs": false,
+      "rule": {
+        "(user's private global instructions for all projects)": "( user's  private  global  instructions  for  all  projects )"
+      }
     }
   ]
 }
