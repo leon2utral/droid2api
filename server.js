@@ -44,6 +44,7 @@ app.get('/', (req, res) => {
       'POST /v1/responses',
       'POST /v1/messages',
       'POST /v1/messages/count_tokens',
+      'POST /v1/generate',
       'GET /status - 401 Error Statistics Dashboard'
     ]
   });
@@ -104,7 +105,8 @@ app.use((req, res, next) => {
       'POST /v1/chat/completions',
       'POST /v1/responses',
       'POST /v1/messages',
-      'POST /v1/messages/count_tokens'
+      'POST /v1/messages/count_tokens',
+      'POST /v1/generate'
     ]
   });
 });
@@ -146,6 +148,7 @@ app.use((err, req, res, next) => {
       logInfo('  POST /v1/responses');
       logInfo('  POST /v1/messages');
       logInfo('  POST /v1/messages/count_tokens');
+      logInfo('  POST /v1/generate');
       logInfo('  GET  /status - 401 Error Statistics Dashboard');
     })
     .on('error', (err) => {

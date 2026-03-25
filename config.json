@@ -2,8 +2,7 @@
   "port": 3000,
   "model_redirects": {
     "claude-3-5-haiku-20241022": "claude-haiku-4-5-20251001",
-    "claude-sonnet-4-5": "claude-sonnet-4-5-20250929",
-    "gpt-5":"gpt-5-2025-08-07"
+    "claude-sonnet-4-5": "claude-sonnet-4-5-20250929"
   },
   "endpoint": [
     {
@@ -15,6 +14,10 @@
       "base_url": "https://api.factory.ai/api/llm/a/v1/messages"
     },
     {
+      "name": "google",
+      "base_url": "https://api.factory.ai/api/llm/g/v1/generate"
+    },
+    {
       "name": "common",
       "base_url": "https://api.factory.ai/api/llm/o/v1/chat/completions"
     }
@@ -22,17 +25,25 @@
   "proxies": [],
   "models": [
     {
-      "name": "Opus 4.1",
-      "id": "claude-opus-4-1-20250805",
+      "name": "Opus 4.5",
+      "id": "claude-opus-4-5-20251101",
       "type": "anthropic",
       "reasoning": "auto",
       "provider": "anthropic"
     },
     {
-      "name": "Opus 4.5",
-      "id": "claude-opus-4-5-20251101",
+      "name": "Opus 4.6",
+      "id": "claude-opus-4-6",
       "type": "anthropic",
       "reasoning": "auto",
+      "provider": "anthropic"
+    },
+    {
+      "name": "Opus 4.6 Fast",
+      "id": "claude-opus-4-6-fast",
+      "type": "anthropic",
+      "reasoning": "auto",
+      "fast":true,
       "provider": "anthropic"
     },
     {
@@ -50,42 +61,99 @@
       "provider": "anthropic"
     },
     {
-      "name": "GPT-5.1",
-      "id": "gpt-5.1",
+      "name": "Sonnet 4.6",
+      "id": "claude-sonnet-4-6",
+      "type": "anthropic",
+      "reasoning": "auto",
+      "provider": "anthropic"
+    },
+    {
+      "name": "GPT-5.4",
+      "id": "gpt-5.4",
       "type": "openai",
       "reasoning": "auto",
       "provider": "openai"
     },
     {
-      "name": "GPT-5.1 Codex",
-      "id": "gpt-5.1-codex",
+      "name": "GPT-5.4 Fast",
+      "id": "gpt-5.4-fast",
       "type": "openai",
-      "reasoning": "off",
+      "reasoning": "auto",
+      "fast":true,
       "provider": "openai"
-    },    
+    },
     {
-      "name": "GPT-5.1 Codex Max",
-      "id": "gpt-5.1-codex-max",
+      "name": "GPT-5.3 Codex",
+      "id": "gpt-5.3-codex",
       "type": "openai",
       "reasoning": "auto",
       "provider": "openai"
     },
     {
-      "name": "GLM-4.6",
-      "id": "glm-4.6",
+      "name": "GPT-5.2",
+      "id": "gpt-5.2",
+      "type": "openai",
+      "reasoning": "auto",
+      "provider": "openai"
+    },
+    {
+      "name": "GPT-5.2 Codex",
+      "id": "gpt-5.2-codex",
+      "type": "openai",
+      "reasoning": "auto",
+      "provider": "openai"
+    },
+      {
+      "name": "GPT-5.4 mini",
+      "id": "gpt-5.4-mini",
+      "type": "openai",
+      "reasoning": "auto",
+      "provider": "openai"
+    },
+    {
+      "name": "GLM-5",
+      "id": "glm-5",
       "type": "common",
       "reasoning": "off",
       "provider": "fireworks"
     },
     {
-      "name": "Gemini-3-Pro",
-      "id": "gemini-3-pro-preview",
+      "name": "GLM-4.7",
+      "id": "glm-4.7",
       "type": "common",
+      "reasoning": "off",
+      "provider": "fireworks"
+    },
+    {
+      "name": "Gemini 3 flash",
+      "id": "gemini-3-flash-preview",
+      "type": "google",
       "reasoning": "auto",
       "provider": "google"
+    },
+    {
+      "name": "Gemini 3.1 Pro",
+      "id": "gemini-3.1-pro-preview",
+      "type": "google",
+      "reasoning": "auto",
+      "provider": "google"
+    },
+    {
+      "name": "Kimi K2.5",
+      "id": "kimi-k2.5",
+      "type": "common",
+      "reasoning": "off",
+      "provider": "fireworks"
+    },
+    {
+      "name": "MiniMax M2.5",
+      "id": "minimax-m2.5",
+      "type": "anthropic",
+      "reasoning": "auto",
+      "provider": "fireworks"
     }
   ],
   "dev_mode": false,
-  "user_agent": "factory-cli/0.32.1",
+  "user_agent": "factory-cli/0.85.0",
   "system_prompt": "You are Droid, an AI software engineering agent built by Factory.\n\n"
 }
